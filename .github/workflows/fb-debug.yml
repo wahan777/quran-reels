@@ -1,0 +1,19 @@
+name: FB Diagnostics (no posting)
+
+# Manual only. Reports token scopes + Page access. Posts nothing.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Run FB diagnostics
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_USER_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: python fb_debug.py
