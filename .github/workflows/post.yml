@@ -1,0 +1,81 @@
+name: Post Quran Reel
+
+# Fires 4x/day (UTC), evenly every 6 hours. Adjust times to your audience's timezone.
+on:
+  # Times are UTC. Pakistan = UTC+5, so these fire every 6h: 12 AM / 6 AM / 12 PM / 6 PM PKT.
+  schedule:
+    - cron: "0 19 * * *"   # 00:00 PKT (midnight)
+    - cron: "0 1 * * *"    # 06:00 PKT (morning)
+    - cron: "0 7 * * *"    # 12:00 PKT (midday)
+    - cron: "0 13 * * *"   # 18:00 PKT (evening)
+  workflow_dispatch: {}     # manual "Run workflow" button for testing
+
+permissions:
+  contents: write           # to commit progress.json + create releases
+
+concurrency:
+  group: post-reel          # never run two posts at once
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto
+
+      - name: Install deps
+        run: pip install pillow arabic-reshaper python-bidi requests
+
+      - name: Read next page
+        id: page
+        run: echo "n=$(python -c "import json,os;print(json.load(open('progress.json'))['next_page'] if os.path.exists('progress.json') else 1)")" >> "$GITHUB_OUTPUT"
+
+      - name: Generate next reel
+        run: python make_next.py 1
+
+      - name: Upload reel as public release asset
+        id: upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PAGE=$(printf "%03d" ${{ steps.page.outputs.n }})
+          FILE="output/page_${PAGE}.mp4"
+          TAG="reel-page-${PAGE}-$(date +%s)"
+          gh release create "$TAG" "$FILE" --title "$TAG" --notes "auto"
+          REPO="${GITHUB_REPOSITORY}"
+          echo "url=https://github.com/${REPO}/releases/download/${TAG}/page_${PAGE}.mp4" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Instagram
+        env:
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: |
+          PAGE=$(printf "%03d" ${{ steps.page.outputs.n }})
+          python post_to_instagram.py "${{ steps.upload.outputs.url }}" "output/page_${PAGE}.txt"
+
+      - name: Publish to Facebook Page
+        continue-on-error: true   # FB is a bonus; never block IG/bookmark on it
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          # Reuse the same long-lived token as IG; the script derives a Page
+          # token from it. Set FB_PAGE_TOKEN secret to override.
+          FB_USER_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: |
+          PAGE=$(printf "%03d" ${{ steps.page.outputs.n }})
+          python post_to_facebook.py "${{ steps.upload.outputs.url }}" "output/page_${PAGE}.txt"
+
+      - name: Commit advanced bookmark
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add progress.json
+          git commit -m "advance to page $(python -c "import json;print(json.load(open('progress.json'))['next_page'])")" || echo "nothing to commit"
+          git pull --rebase origin main
+          git push
