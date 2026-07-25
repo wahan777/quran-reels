@@ -13,7 +13,7 @@ take a local file). In CI we upload the mp4 to a GitHub Release first.
 """
 import sys, os, time, json, urllib.parse, urllib.request
 
-API = "https://graph.facebook.com/v24.0"
+API = "https://graph.facebook.com/v25.0"
 IG_USER_ID = os.environ["IG_USER_ID"]
 TOKEN = os.environ["IG_ACCESS_TOKEN"]
 
