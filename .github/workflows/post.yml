@@ -4,17 +4,17 @@ name: Post Quran Reel
 on:
   # Times are UTC. Pakistan = UTC+5, so these fire every 6h: 12 AM / 6 AM / 12 PM / 6 PM PKT.
   schedule:
-    - cron: "0 19 * * *"   # 00:00 PKT (midnight)
-    - cron: "0 1 * * *"    # 06:00 PKT (morning)
-    - cron: "0 7 * * *"    # 12:00 PKT (midday)
-    - cron: "0 13 * * *"   # 18:00 PKT (evening)
-  workflow_dispatch: {}     # manual "Run workflow" button for testing
+    - cron: "0 19 * * *" # 00:00 PKT (midnight)
+    - cron: "0 1 * * *" # 06:00 PKT (morning)
+    - cron: "0 7 * * *" # 12:00 PKT (midday)
+    - cron: "0 13 * * *" # 18:00 PKT (evening)
+  workflow_dispatch: {} # manual "Run workflow" button for testing
 
 permissions:
-  contents: write           # to commit progress.json + create releases
+  contents: write # to commit progress.json + create releases
 
 concurrency:
-  group: post-reel          # never run two posts at once
+  group: post-reel # never run two posts at once
   cancel-in-progress: false
 
 jobs:
@@ -51,16 +51,7 @@ jobs:
           REPO="${GITHUB_REPOSITORY}"
           echo "url=https://github.com/${REPO}/releases/download/${TAG}/page_${PAGE}.mp4" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to Instagram
-        env:
-          IG_USER_ID: ${{ secrets.IG_USER_ID }}
-          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
-        run: |
-          PAGE=$(printf "%03d" ${{ steps.page.outputs.n }})
-          python post_to_instagram.py "${{ steps.upload.outputs.url }}" "output/page_${PAGE}.txt"
-
       - name: Publish to Facebook Page
-        continue-on-error: true   # FB is a bonus; never block IG/bookmark on it
         env:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           # Reuse the same long-lived token as IG; the script derives a Page
