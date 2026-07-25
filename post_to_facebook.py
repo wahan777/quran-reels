@@ -17,7 +17,14 @@ Usage:
 Note: video_url MUST be a public HTTPS URL — Facebook fetches it directly
 (hosted upload). In CI we upload the mp4 to a GitHub Release first.
 """
-import sys, os, time, json, urllib.parse, urllib.request, urllib.error
+
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 API = "https://graph.facebook.com/v21.0"
 PAGE_ID = os.environ["FB_PAGE_ID"]
@@ -64,8 +71,9 @@ def page_token():
 def publish(video_url, caption):
     token = page_token()
     # 1. start: get a video_id + upload_url
-    start = _post(f"{PAGE_ID}/video_reels",
-                  {"upload_phase": "start", "access_token": token})
+    start = _post(
+        f"{PAGE_ID}/video_reels", {"upload_phase": "start", "access_token": token}
+    )
     video_id = start["video_id"]
     upload_url = start["upload_url"]
     print("video_id:", video_id)
@@ -74,21 +82,32 @@ def publish(video_url, caption):
     req = urllib.request.Request(upload_url, method="POST")
     req.add_header("Authorization", f"OAuth {token}")
     req.add_header("file_url", video_url)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        up = json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            up = json.load(r)
+    except urllib.error.HTTPError as e:
+        raise SystemExit(
+            f"Upload phase -> HTTP {e.code}: {_read_err(e)} (file_url={video_url})"
+        )
     if not up.get("success", False):
         raise SystemExit(f"Upload phase failed: {up}")
 
     # 3. finish + publish, then poll until the reel is ready/published
-    fin = _post(f"{PAGE_ID}/video_reels", {
-        "video_id": video_id, "upload_phase": "finish",
-        "video_state": "PUBLISHED", "description": caption,
-        "access_token": token})
+    fin = _post(
+        f"{PAGE_ID}/video_reels",
+        {
+            "video_id": video_id,
+            "upload_phase": "finish",
+            "video_state": "PUBLISHED",
+            "description": caption,
+            "access_token": token,
+        },
+    )
     print("finish:", fin)
 
     for _ in range(40):
         st = _get(video_id, {"fields": "status", "access_token": token})
-        status = (st.get("status") or {})
+        status = st.get("status") or {}
         vstatus = status.get("video_status")
         print(f"  video_status: {vstatus}")
         if vstatus in ("ready", "published"):
